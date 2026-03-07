@@ -63,6 +63,12 @@ mr* =
   + eps_r,   eps_r ~ N(0, 0.03^2)
 ```
 
+Canonical normalization (모든 feature, selection 이전):
+
+```text
+x_f = (x_f - mean(x_f)) / std(x_f)
+```
+
 해석:
 - `z_f`는 코드의 `cluster_latent[:, cluster-1]`에 해당하며, `x_f^(0)`는 여기에 노이즈를 더한 값입니다.
 - `target` 식의 좌변(`target*`)과 우변의 `x_target^(0)`은 같은 이름의 "동일 시점 변수"가 아니라, 재정의 전/후 단계가 다른 값입니다.
@@ -72,6 +78,7 @@ mr* =
 - `tanh`, `(target*)^3` 항으로 `target`과의 비선형 관계를 만들었습니다.
 - 비선형 결합 강도를 높여, 클러스터 제외 규칙 하에서 `the_most_relevant`가 가장 관련성 높은 후보가 되도록 설계했습니다.
 - `cfg_effect` 항은 DBI 평가에 필요한 config 분리 가능성을 유지합니다.
+- 최종 반환 직전 모든 feature에 canonical normalization(z-score, 평균 0/표준편차 1)을 적용합니다.
 
 ## 빠른 시작 (Windows PowerShell)
 
@@ -108,10 +115,13 @@ df.to_feather("data/mydata.feather")
 `run_protocol.py`는 `TESTING.md` 프로토콜을 실행하는 스크립트입니다.
 
 동작:
-- 랜덤 데이터셋 3개 생성 (seed: `0, 1, 2`)
+- 데이터 크기 설정 3개 각각에 대해 seed `0, 1, 2, 3, 4`를 모두 반복해 데이터셋 생성
+  - 총 데이터셋 수: `3 settings x 5 seeds = 15`
+  - 설정: `(100, 300, 3)`, `(1000, 300, 3)`, `(1000, 3000, 30)`
+  - 위 3개 설정은 모두 `cluster당 feature 100개`를 만족
 - 생성 데이터셋을 `tests/tmp`에 저장
-- 데이터셋별 선택 피처와 정답 피처를 평가
-- 3행 결과 테이블을 생성해 `result.csv`로 저장
+- 4개 선택 방법(`abs_pearson`, `min_dbi`, `shap`, `mi`)으로 데이터셋별 선택 피처와 정답 피처를 평가
+- 60행 결과 테이블(3개 설정 x 5개 seed x 4개 방법)을 생성해 `result.csv`로 저장
 - 저장 전 `.round(3)` 적용
 
 실행 명령:
@@ -122,7 +132,7 @@ python run_protocol.py
 ```
 
 출력:
-- `tests/tmp`의 테스트 데이터셋 (`dataset_seed_0.feather`, `dataset_seed_1.feather`, `dataset_seed_2.feather`)
+- `tests/tmp`의 테스트 데이터셋 (`dataset_1_r100_f300_c3_seed_0.feather` 등)
 - 프로젝트 루트의 `result.csv`
 
 ## 테스트 실행
@@ -130,6 +140,15 @@ python run_protocol.py
 ```powershell
 $env:PYTHONPATH = "src"
 pytest -q
+```
+
+## 시각화 실행
+
+`VISUAL.md`와 `visualize_results.py`를 사용해 결과를 시각화할 수 있습니다.
+
+```powershell
+$env:PYTHONPATH = "src"
+python visualize_results.py --result-csv result.csv --datasets-dir tests/tmp --output-dir visuals
 ```
 
 ## 참고

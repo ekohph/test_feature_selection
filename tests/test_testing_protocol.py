@@ -18,7 +18,7 @@ def _cluster_id(name: str) -> int:
 def test_run_three_dataset_test_schema_and_rows():
     result = run_three_dataset_test()
 
-    assert len(result) == 9
+    assert len(result) == 60
 
     required_columns = [
         "selection_method",
@@ -32,6 +32,19 @@ def test_run_three_dataset_test_schema_and_rows():
     ]
     for col in required_columns:
         assert col in result.columns
+
+    assert set(result["selection_method"].unique()) == {
+        "abs_pearson",
+        "min_dbi",
+        "shap",
+        "mi",
+    }
+    assert result["dataset_id"].nunique() == 15
+
+    seed_counts = result[["n_rows", "n_features", "n_clusters", "seed"]].drop_duplicates()
+    grouped = seed_counts.groupby(["n_rows", "n_features", "n_clusters"])["seed"].nunique()
+    assert grouped.min() == 5
+    assert grouped.max() == 5
 
 
 def test_selection_respects_cluster_exclusion_and_runtime_is_non_negative():

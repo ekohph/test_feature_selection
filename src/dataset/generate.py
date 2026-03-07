@@ -9,6 +9,17 @@ import numpy as np
 import pandas as pd
 
 
+def _canonical_normalize_feature_columns(values: dict[str, np.ndarray]) -> None:
+    """Apply per-feature canonical normalization (z-score) in place."""
+    for feature_name, feature_values in values.items():
+        mean = float(np.mean(feature_values))
+        std = float(np.std(feature_values))
+        if std == 0.0:
+            values[feature_name] = feature_values - mean
+            continue
+        values[feature_name] = (feature_values - mean) / std
+
+
 def _build_feature_names(n_features: int, n_clusters: int) -> tuple[list[str], list[int]]:
     """Build feature names in the form ``f_{i}_c_{j}`` and their cluster ids."""
     if n_features < 1:
@@ -40,6 +51,7 @@ def generate_synthetic_dataset(
     n_rows: int | None = None,
     target: str | None = None,
     the_most_relevant: str | None = None,
+    config_effect_scale: float = 3.0,
     seed: int | None = 42,
 ) -> pd.DataFrame:
     """Create a synthetic wide-format dataset for feature relevance experiments.
@@ -78,6 +90,8 @@ def generate_synthetic_dataset(
         n_rows = n_features * measurements_per_feature
     elif n_rows < 1:
         raise ValueError("n_rows must be at least 1")
+    if config_effect_scale <= 0:
+        raise ValueError("config_effect_scale must be > 0")
 
     cfg_count = int(rng.integers(min_cfg, max_cfg + 1))
     configs = [f"cfg_{idx}" for idx in range(cfg_count)]
@@ -96,7 +110,9 @@ def generate_synthetic_dataset(
     # Most relevant also varies strongly by config.
     # It is intentionally a nonlinear transform of target while keeping
     # a strong overall association so it is the most relevant candidate.
-    cfg_effect_map = {cfg_name: float(rng.normal(scale=2.0)) for cfg_name in pd.unique(config)}
+    cfg_effect_map = {
+        cfg_name: float(rng.normal(scale=config_effect_scale)) for cfg_name in pd.unique(config)
+    }
     cfg_effect = np.array([cfg_effect_map[cfg_name] for cfg_name in config])
     target_values = values[target]
     values[the_most_relevant] = (
@@ -106,6 +122,9 @@ def generate_synthetic_dataset(
         + 0.40 * cfg_effect
         + rng.normal(scale=0.03, size=n_rows)
     )
+
+    # Canonical normalization is applied before any downstream feature selection.
+    _canonical_normalize_feature_columns(values)
 
     df = pd.DataFrame({"config": config})
     for feature_name in feature_names:

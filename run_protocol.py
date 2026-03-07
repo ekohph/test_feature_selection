@@ -1,7 +1,7 @@
 ﻿"""Run the TESTING.md protocol and persist datasets/results.
 
 Outputs:
-- test datasets: tests/tmp/dataset_seed_<seed>.feather
+- test datasets: tests/tmp/dataset_<dataset_id>_r<n_rows>_f<n_features>_c<n_clusters>_seed_<seed>.feather
 - protocol result table: result.csv
 """
 
@@ -16,11 +16,12 @@ from dataset.testing import (
     DEFAULT_DATASET_SETTINGS,
     default_selectors,
     evaluate_one_dataset,
+    warm_up_selectors,
 )
 
 
 def run_protocol() -> pd.DataFrame:
-    seeds = [0, 1, 2]
+    seeds = [0, 1, 2, 3, 4]
     target = "f_1_c_1"
     the_most_relevant = "f_1_c_3"
     methodologies = default_selectors()
@@ -31,10 +32,18 @@ def run_protocol() -> pd.DataFrame:
 
     rows: list[dict[str, float | str | int]] = []
 
-    dataset_id = 0
+    if not seeds:
+        raise ValueError("seeds must contain at least one seed")
+
+    warm_up_selectors(
+        methodologies,
+        target=target,
+        the_most_relevant=the_most_relevant,
+    )
+
+    dataset_id = 1
     for n_rows, n_features, n_clusters in dataset_settings:
         for seed in seeds:
-            dataset_id += 1
             df = generate_synthetic_dataset(
                 n_rows=n_rows,
                 n_features=n_features,
@@ -64,6 +73,7 @@ def run_protocol() -> pd.DataFrame:
                 row["seed"] = seed
                 row["target"] = target
                 rows.append(row)
+            dataset_id += 1
 
     required_columns = [
         "selection_method",
@@ -81,7 +91,7 @@ def run_protocol() -> pd.DataFrame:
     optional_columns = ["dataset_id", "seed", "target"]
 
     result = pd.DataFrame(rows)[required_columns + optional_columns]
-    expected_rows = len(seeds) * len(dataset_settings) * len(methodologies)
+    expected_rows = len(dataset_settings) * len(seeds) * len(methodologies)
     if len(result) != expected_rows:
         raise RuntimeError(f"result must contain exactly {expected_rows} rows, got {len(result)}")
 

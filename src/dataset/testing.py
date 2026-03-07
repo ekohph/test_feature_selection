@@ -14,11 +14,14 @@ from dataset.generate import generate_synthetic_dataset
 
 Selector = Callable[[pd.DataFrame, str, Sequence[str]], str]
 DatasetSetting = tuple[int, int, int]  # (n_rows, n_features, n_clusters)
+_SHAP_MODULE = None
+_RF_REGRESSOR = None
+_MI_REGRESSION = None
 
 DEFAULT_DATASET_SETTINGS: tuple[DatasetSetting, ...] = (
     (100, 300, 3),
     (1000, 300, 3),
-    (1000, 10000, 100),
+    (1000, 3000, 30),
 )
 
 
@@ -29,6 +32,49 @@ class DatasetSpec:
     seed: int
     target: str
     the_most_relevant: str
+
+
+def _prepare_selector_dependencies(selector: Selector) -> None:
+    """Load optional dependencies outside measured timing windows."""
+    if selector is select_feature_by_abs_shapley:
+        _get_shap_dependencies()
+    elif selector is select_feature_by_mutual_info:
+        _get_mi_dependency()
+
+
+def _get_shap_dependencies():
+    global _SHAP_MODULE, _RF_REGRESSOR
+    if _SHAP_MODULE is not None and _RF_REGRESSOR is not None:
+        return _SHAP_MODULE, _RF_REGRESSOR
+
+    try:
+        import shap
+        from sklearn.ensemble import RandomForestRegressor
+    except ImportError as exc:
+        raise ImportError(
+            "shap selector requires 'shap' and 'scikit-learn'. "
+            "Install with: pip install shap scikit-learn"
+        ) from exc
+
+    _SHAP_MODULE = shap
+    _RF_REGRESSOR = RandomForestRegressor
+    return _SHAP_MODULE, _RF_REGRESSOR
+
+
+def _get_mi_dependency():
+    global _MI_REGRESSION
+    if _MI_REGRESSION is not None:
+        return _MI_REGRESSION
+
+    try:
+        from sklearn.feature_selection import mutual_info_regression
+    except ImportError as exc:
+        raise ImportError(
+            "mi selector requires 'scikit-learn'. Install with: pip install scikit-learn"
+        ) from exc
+
+    _MI_REGRESSION = mutual_info_regression
+    return _MI_REGRESSION
 
 
 def _extract_cluster_id(feature_name: str) -> int:
@@ -119,14 +165,7 @@ def select_feature_by_min_dbi(df: pd.DataFrame, target: str, candidates: Sequenc
 
 def select_feature_by_abs_shapley(df: pd.DataFrame, target: str, candidates: Sequence[str]) -> str:
     """Select feature by max absolute SHAP index using shap.TreeExplainer."""
-    try:
-        import shap
-        from sklearn.ensemble import RandomForestRegressor
-    except ImportError as exc:
-        raise ImportError(
-            "shap selector requires 'shap' and 'scikit-learn'. "
-            "Install with: pip install shap scikit-learn"
-        ) from exc
+    shap, RandomForestRegressor = _get_shap_dependencies()
 
     x = df[list(candidates)].to_numpy(dtype=float)
     y = df[target].to_numpy(dtype=float)
@@ -166,12 +205,36 @@ def select_feature_by_abs_shapley(df: pd.DataFrame, target: str, candidates: Seq
     return best_feature
 
 
+def select_feature_by_mutual_info(df: pd.DataFrame, target: str, candidates: Sequence[str]) -> str:
+    """Select feature by maximum mutual information to target."""
+    mutual_info_regression = _get_mi_dependency()
+
+    x = df[list(candidates)].to_numpy(dtype=float)
+    y = df[target].to_numpy(dtype=float)
+    scores = mutual_info_regression(x, y, random_state=0)
+
+    best_feature: str | None = None
+    best_score = -np.inf
+    for feature, score in zip(candidates, scores):
+        score_f = float(score)
+        if np.isnan(score_f):
+            continue
+        if score_f > best_score or (score_f == best_score and (best_feature is None or feature < best_feature)):
+            best_feature = feature
+            best_score = score_f
+
+    if best_feature is None:
+        raise ValueError("all candidate mutual information scores are NaN")
+    return best_feature
+
+
 def default_selectors() -> list[tuple[str, Selector]]:
     """Return default selector methods used by protocol runs."""
     return [
         ("abs_pearson", select_feature_by_abs_corr),
         ("min_dbi", select_feature_by_min_dbi),
         ("shap", select_feature_by_abs_shapley),
+        ("mi", select_feature_by_mutual_info),
     ]
 
 
@@ -229,6 +292,7 @@ def evaluate_one_dataset(
     if the_ground_truth not in df.columns:
         raise ValueError(f"the_ground_truth '{the_ground_truth}' is not present in dataframe")
 
+    _prepare_selector_dependencies(selector)
     start = perf_counter()
     selected = selector(df, target, candidates)
     computation_time_sec = perf_counter() - start
@@ -249,9 +313,34 @@ def evaluate_one_dataset(
     }
 
 
+def warm_up_selectors(
+    methods: Sequence[tuple[str, Selector]],
+    *,
+    target: str,
+    the_most_relevant: str,
+    seed: int = 12345,
+) -> None:
+    """Warm up selector dependencies and one dry-run to reduce cold-start bias."""
+    if not methods:
+        return
+
+    warm_df = generate_synthetic_dataset(
+        n_rows=30,
+        n_features=60,
+        n_clusters=3,
+        target=target,
+        the_most_relevant=the_most_relevant,
+        seed=seed,
+    )
+    candidates = _candidate_features(warm_df, target)
+    for _, selector in methods:
+        _prepare_selector_dependencies(selector)
+        selector(warm_df, target, candidates)
+
+
 def run_three_dataset_test(
     *,
-    seeds: Iterable[int] = (0, 1, 2),
+    seeds: Iterable[int] = (0, 1, 2, 3, 4),
     target: str = "f_1_c_1",
     the_most_relevant: str = "f_1_c_3",
     dataset_settings: Iterable[DatasetSetting] = DEFAULT_DATASET_SETTINGS,
@@ -259,7 +348,7 @@ def run_three_dataset_test(
 ) -> pd.DataFrame:
     """Run the TESTING.md protocol and return result rows.
 
-    The returned table has one row per (dataset x selection method) and required columns:
+    The returned table has one row per (dataset_setting x seed x selection method) and required columns:
     selection_method, selected_feature, dbi_selected_feature, corr_selected_feature,
     the_ground_truth, dbi_ground_truth_feature, corr_ground_truth_feature, computation_time_sec.
     If ``selector`` is provided, one method is used. Otherwise defaults are used.
@@ -268,6 +357,8 @@ def run_three_dataset_test(
     settings_list = [(int(r), int(f), int(c)) for r, f, c in dataset_settings]
     if not settings_list:
         raise ValueError("dataset_settings must contain at least one setting")
+    if not seed_list:
+        raise ValueError("seeds must contain at least one seed")
 
     methods: list[tuple[str, Selector]]
     if selector is None:
@@ -275,11 +366,16 @@ def run_three_dataset_test(
     else:
         methods = [("custom_selector", selector)]
 
+    warm_up_selectors(
+        methods,
+        target=target,
+        the_most_relevant=the_most_relevant,
+    )
+
     rows: list[dict[str, float | str]] = []
-    dataset_id = 0
+    dataset_id = 1
     for n_rows, n_features, n_clusters in settings_list:
         for seed in seed_list:
-            dataset_id += 1
             df = generate_synthetic_dataset(
                 n_rows=n_rows,
                 n_features=n_features,
@@ -303,6 +399,7 @@ def run_three_dataset_test(
                 row["seed"] = seed
                 row["target"] = target
                 rows.append(row)
+            dataset_id += 1
 
     required_columns = [
         "selection_method",
@@ -326,7 +423,7 @@ def run_three_dataset_test(
     ordered_columns = required_columns + ["dataset_id", "seed", "target"]
     result = result[ordered_columns]
 
-    expected_rows = len(seed_list) * len(settings_list) * len(methods)
+    expected_rows = len(settings_list) * len(seed_list) * len(methods)
     if len(result) != expected_rows:
         raise RuntimeError(f"result table must contain {expected_rows} rows, got {len(result)}")
 

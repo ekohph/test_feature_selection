@@ -2,7 +2,7 @@
 
 ## 목적
 
-매 테스트 실행마다 **무작위로 생성한 데이터셋 3개**에서
+매 테스트 실행마다 **3개 데이터셋 설정 x 5개 seed로 생성한 데이터셋 15개**에서
 feature-selection 동작을 평가합니다.
 
 각 데이터셋에서 수행할 일:
@@ -10,15 +10,15 @@ feature-selection 동작을 평가합니다.
 - 선택 알고리즘 실행
 - 선택 품질과 실행 시간 기록
 
-## 데이터셋 프로토콜 (랜덤 9개)
+## 데이터셋 프로토콜 (랜덤 15개)
 
-- 실행당 데이터셋 개수: `3`
-- 3번 실행 : (1) Row 100개, Features 300개, Cluster 3개
-            (2) Row 1000개, Feature 300개, Cluster 3개
-            (3) Row 1000개, Feature 10000개, Cluster 100개
-- 총 9개의 데이터셋 생성 
-- 각 데이터셋은 서로 다른 seed로 독립 생성
-- 권장 seed: `[0, 1, 2]` (또는 고정된 임의의 3개 seed)
+- 데이터셋 설정 3개:
+  - (1) Row 100개, Feature 300개, Cluster 3개
+  - (2) Row 1000개, Feature 300개, Cluster 3개
+  - (3) Row 1000개, Feature 3000개, Cluster 30개
+- 각 설정마다 seed `[0, 1, 2, 3, 4]`를 반복해 생성
+- 총 15개 데이터셋 생성 (`3 settings x 5 seeds`)
+- 위 3개 설정은 모두 `cluster당 feature 100개`를 만족 (`n_features / n_clusters = 100`)
 - 각 데이터셋은 클러스터 제외 가정을 만족해야 함:
   - 선택된 feature는 `target`일 수 없음
   - 선택된 feature는 `target`과 같은 클러스터일 수 없음
@@ -45,12 +45,16 @@ the_most_relevant =
   + 0.15 * x_most_relevant
   + 0.40 * cfg_effect(config)
   + eps_r,   eps_r ~ N(0, 0.03^2)
+
+# canonical normalization (before selection)
+x_f = (x_f - mean(x_f)) / std(x_f)
 ```
 
 요점:
 - `the_most_relevant`는 `target`과 비선형 관계(`tanh`, `target^3`)를 갖도록 생성됨
 - 클러스터 제외 규칙 하에서 가장 높은 관련성을 갖도록 설계됨
 - `cfg_effect`로 config 기반 분리 가능성을 유지함
+- feature selection 전에 모든 feature(`config` 제외)에 canonical normalization(z-score)을 적용함
 
 ## 데이터셋별 지표
 
@@ -71,7 +75,7 @@ the_most_relevant =
 ## Selector 방법론
 
 프로토콜은 selector(피처 선택 기준)를 바꿔 여러 방법론을 비교할 수 있습니다.
-현재 구현된 방법론은 아래 3가지입니다.
+현재 구현된 방법론은 아래 4가지입니다.
 
 1. `abs_pearson`
 - 정의: 후보 피처와 `target`의 절대 Pearson 상관계수가 최대인 피처 선택
@@ -93,6 +97,11 @@ the_most_relevant =
   - 선택: `argmax(mean_abs_shap)`
 - 장점: 비선형 및 상호작용 효과를 반영한 중요도 산출 가능
 - 한계: 모델 학습 + SHAP 계산 비용이 커서 데이터가 커질수록 실행시간 증가
+
+4. `mi`
+- 정의: `mutual_info_regression`으로 후보 feature와 `target`의 mutual information을 계산해 최대값 선택
+- 장점: 비선형 의존성을 반영 가능
+- 한계: `abs_pearson` 대비 계산 비용이 증가함
 
 참고:
 - 모든 selector는 공통으로 클러스터 제외 규칙(타깃 본인/동일 클러스터 제외) 이후 후보군에서 동작합니다.
@@ -123,14 +132,19 @@ the_most_relevant =
   - `T`: 트리 개수, `D`: 트리 깊이(또는 리프 구조 복잡도)
 - 해석: 일반적으로 `abs_pearson`/`min_dbi`보다 상수항과 구조 의존 비용이 커서, `N`, `P`, `T`, `D`가 커질수록 증가폭이 큼
 
+4. `mi`
+- MI 추정(`mutual_info_regression`)을 각 후보 feature에 대해 수행
+- 대략 `O(P * N)`에 가까운 증가 경향
+- 해석: 비선형 관계를 반영하지만 계산량은 `abs_pearson`보다 큼
+
 요약:
-- 세 방법 모두 feature 수 `P`에 대해 선형적으로 증가
+- 네 방법 모두 feature 수 `P`에 대해 선형적으로 증가
 - row 수 `N` 증가에도 대체로 선형 증가
-- 예상 상대 속도(일반적): `abs_pearson` <= `min_dbi` < `shap(TreeExplainer)` (데이터 분포/모델 파라미터에 따라 변동 가능)
+- 예상 상대 속도(일반적): `abs_pearson` <= `min_dbi` <= `mi` < `shap(TreeExplainer)` (데이터 분포/모델 파라미터에 따라 변동 가능)
 
 ## 결과 테이블 형식 (필수)
 
-결과 테이블은 **27행**(데이터셋당 3행)이어야 하며 다음 컬럼을 포함해야 합니다.
+결과 테이블은 **60행**이어야 하며(`3 settings x 5 seeds x 4 selectors`) 다음 컬럼을 포함해야 합니다.
 - `selection_method` 
 - `n_rows` 
 - `n_features` 
@@ -153,9 +167,12 @@ the_most_relevant =
 
 ## 검증 체크리스트
 
-- 결과 테이블 행 수가 정확히 27인가
+- 결과 테이블 행 수가 정확히 60인가
+- 각 `(n_rows, n_features, n_clusters)` 설정마다 seed가 정확히 5개인가 (`0,1,2,3,4`)
+- 각 `(dataset setting, seed)` 조합마다 selector 결과가 4행인가
 - 필수 컬럼이 모두 존재하는가
 - 필수 결과 컬럼에 null이 없는가
 - `selected_feature`와 `the_ground_truth`가 유효한 데이터셋 컬럼인가
 - 모든 행에서 실행 시간이 0 이상인가
 - `result.csv` 값이 소수점 셋째 자리로 반올림되어 저장되는가
+- 생성된 데이터셋에서 feature 컬럼(`config` 제외)이 canonical normalization 상태(평균≈0, 표준편차≈1)인지 확인

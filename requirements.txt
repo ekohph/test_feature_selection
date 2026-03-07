@@ -3,3 +3,4 @@ numpy
 pyarrow
 scikit-learn
 shap
+matplotlib

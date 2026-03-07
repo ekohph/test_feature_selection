@@ -113,5 +113,22 @@ def test_most_relevant_is_nonlinear_and_highly_related():
     assert corr_gt > max_other
 
 
+def test_all_features_are_canonically_normalized():
+    df = generate_synthetic_dataset(
+        n_features=60,
+        n_clusters=3,
+        n_rows=200,
+        target="f_1_c_1",
+        the_most_relevant="f_1_c_3",
+        seed=7,
+    )
+
+    feature_cols = [c for c in df.columns if c != "config"]
+    for col in feature_cols:
+        values = df[col].to_numpy(dtype=float)
+        assert np.isclose(values.mean(), 0.0, atol=1e-10)
+        assert np.isclose(values.std(ddof=0), 1.0, atol=1e-10)
+
+
 if __name__ == "__main__":
     test_save_and_load(tmp_path=Path("tmp"))
