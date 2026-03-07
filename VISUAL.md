@@ -15,8 +15,8 @@
 ## 출력
 
 - `visuals/scatter_gt.png`
-  - 각 `dataset_id`별로 `the_ground_truth` vs `target` 산점도
-  - 점 색상: `config`
+  - 각 `dataset_id`별 `the_ground_truth` vs `target` 산점도
+  - 점 색상: `config` (기본 범주형 팔레트 `tab20`)
 - `visuals/scatter_selected.png`
   - `selected_feature != the_ground_truth`인 경우만 `selected_feature` vs `target` 산점도
   - 불일치가 없으면 안내 문구 이미지를 저장

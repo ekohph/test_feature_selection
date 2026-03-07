@@ -66,7 +66,17 @@ def _build_config_style(
         all_labels.update(df["config"].astype(str).unique().tolist())
     config_labels = sorted(all_labels)
     config_to_idx = {cfg: idx for idx, cfg in enumerate(config_labels)}
-    config_cmap = ListedColormap(plt.cm.Blues(np.linspace(0.35, 0.95, len(config_labels))))
+
+    # Use a qualitative palette so neighboring config labels are easier to distinguish.
+    base_cmap = plt.get_cmap("tab20")
+    if len(config_labels) <= base_cmap.N:
+        colors = base_cmap(np.linspace(0.0, 1.0, len(config_labels)))
+    else:
+        base_colors = base_cmap(np.linspace(0.0, 1.0, base_cmap.N))
+        repeats = int(np.ceil(len(config_labels) / base_cmap.N))
+        colors = np.vstack([base_colors for _ in range(repeats)])[: len(config_labels)]
+    config_cmap = ListedColormap(colors)
+
     config_norm = BoundaryNorm(np.arange(-0.5, len(config_labels) + 0.5, 1), config_cmap.N)
     return config_labels, config_to_idx, config_cmap, config_norm
 
