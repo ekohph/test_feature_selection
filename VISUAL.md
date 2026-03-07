@@ -6,6 +6,7 @@
 
 1. 정답 피처/선택 피처와 `target`의 관계를 산점도로 확인
 2. 데이터셋 shape 및 선택 방법별 계산 시간 분포를 비교
+3. 관계 모드(`relationship_mode`) 추가 이후 시간 분포 해석 기준을 명확히 유지
 
 ## 입력
 
@@ -25,6 +26,9 @@
   - 색상: `selection_method`
   - y축: `computation_time_sec` (log scale)
   - 기본 요약: `median_iqr` (center=median, error=IQR)
+- `visuals/time_bar_default_nonlinear.png`
+- `visuals/time_bar_non_monotonic_strong.png`
+  - `relationship_mode`별로 분리 집계한 시간 막대 그래프
 
 ## 실행 방법 (PowerShell)
 
@@ -46,7 +50,8 @@ python visualize_results.py --result-csv result.csv --datasets-dir tests/tmp --o
 
 ## 참고
 
-- 현재 프로토콜(3 settings x 5 seeds x 4 selectors) 기준 `result.csv`는 60행입니다.
+- 현재 프로토콜(3 settings x 5 seeds x 2 relationship modes x 4 selectors) 기준 `result.csv`는 120행입니다.
 - `result.csv` 필수 컬럼:
   - `selection_method`, `dataset_id`, `seed`, `n_rows`, `n_features`, `n_clusters`
   - `selected_feature`, `the_ground_truth`, `target`, `computation_time_sec`
+- `relationship_mode` 컬럼이 포함되면, 현재 `time_bar.png`는 해당 모드들을 shape별로 함께 집계합니다.

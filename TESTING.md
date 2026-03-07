@@ -2,7 +2,7 @@
 
 ## 목적
 
-매 테스트 실행마다 **3개 데이터셋 설정 x 5개 seed로 생성한 데이터셋 15개**에서
+매 테스트 실행마다 **3개 데이터셋 설정 x 5개 seed x 2개 관계 모드로 생성한 데이터셋 30개**에서
 feature-selection 동작을 평가합니다.
 
 각 데이터셋에서 수행할 일:
@@ -10,14 +10,17 @@ feature-selection 동작을 평가합니다.
 - 선택 알고리즘 실행
 - 선택 품질과 실행 시간 기록
 
-## 데이터셋 프로토콜 (랜덤 15개)
+## 데이터셋 프로토콜 (랜덤 30개)
 
 - 데이터셋 설정 3개:
   - (1) Row 100개, Feature 300개, Cluster 3개
   - (2) Row 1000개, Feature 300개, Cluster 3개
   - (3) Row 1000개, Feature 3000개, Cluster 30개
 - 각 설정마다 seed `[0, 1, 2, 3, 4]`를 반복해 생성
-- 총 15개 데이터셋 생성 (`3 settings x 5 seeds`)
+- 각 `(setting, seed)` 조합에서 관계 모드 2개를 모두 생성:
+  - `default_nonlinear` (기존)
+  - `non_monotonic_strong` (신규)
+- 총 30개 데이터셋 생성 (`3 settings x 5 seeds x 2 modes`)
 - 위 3개 설정은 모두 `cluster당 feature 100개`를 만족 (`n_features / n_clusters = 100`)
 - 각 데이터셋은 클러스터 제외 가정을 만족해야 함:
   - 선택된 feature는 `target`일 수 없음
@@ -46,12 +49,22 @@ the_most_relevant =
   + 0.40 * cfg_effect(config)
   + eps_r,   eps_r ~ N(0, 0.03^2)
 
+# non_monotonic_strong mode
+the_most_relevant =
+    1.20 * sin(2.4 * target)
+  + 0.55 * cos(0.8 * target^2)
+  + 0.20 * target^2
+  + 0.12 * x_most_relevant
+  + 0.45 * cfg_effect(config)
+  + eps_r,   eps_r ~ N(0, 0.03^2)
+
 # canonical normalization (before selection)
 x_f = (x_f - mean(x_f)) / std(x_f)
 ```
 
 요점:
 - `the_most_relevant`는 `target`과 비선형 관계(`tanh`, `target^3`)를 갖도록 생성됨
+- `non_monotonic_strong` 모드에서는 `sin`, `cos(target^2)`를 포함한 강한 비단조 비선형 관계를 사용함
 - 클러스터 제외 규칙 하에서 가장 높은 관련성을 갖도록 설계됨
 - `cfg_effect`로 config 기반 분리 가능성을 유지함
 - feature selection 전에 모든 feature(`config` 제외)에 canonical normalization(z-score)을 적용함
@@ -144,7 +157,7 @@ x_f = (x_f - mean(x_f)) / std(x_f)
 
 ## 결과 테이블 형식 (필수)
 
-결과 테이블은 **60행**이어야 하며(`3 settings x 5 seeds x 4 selectors`) 다음 컬럼을 포함해야 합니다.
+결과 테이블은 **120행**이어야 하며(`3 settings x 5 seeds x 2 modes x 4 selectors`) 다음 컬럼을 포함해야 합니다.
 - `selection_method` 
 - `n_rows` 
 - `n_features` 
@@ -161,15 +174,17 @@ x_f = (x_f - mean(x_f)) / std(x_f)
 - `dataset_id`
 - `seed`
 - `target`
+- `relationship_mode`
 
 반올림 규칙:
 - 결과 DataFrame에 `.round(3)` 적용 후 `result.csv` 저장
 
 ## 검증 체크리스트
 
-- 결과 테이블 행 수가 정확히 60인가
+- 결과 테이블 행 수가 정확히 120인가
 - 각 `(n_rows, n_features, n_clusters)` 설정마다 seed가 정확히 5개인가 (`0,1,2,3,4`)
-- 각 `(dataset setting, seed)` 조합마다 selector 결과가 4행인가
+- 각 `(n_rows, n_features, n_clusters, seed)` 조합마다 관계 모드가 2개(`default_nonlinear`, `non_monotonic_strong`)인가
+- 각 `(dataset setting, seed, relationship_mode)` 조합마다 selector 결과가 4행인가
 - 필수 컬럼이 모두 존재하는가
 - 필수 결과 컬럼에 null이 없는가
 - `selected_feature`와 `the_ground_truth`가 유효한 데이터셋 컬럼인가

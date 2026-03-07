@@ -23,6 +23,10 @@ DEFAULT_DATASET_SETTINGS: tuple[DatasetSetting, ...] = (
     (1000, 300, 3),
     (1000, 3000, 30),
 )
+DEFAULT_RELATIONSHIP_MODES: tuple[str, ...] = (
+    "default_nonlinear",
+    "non_monotonic_strong",
+)
 
 
 @dataclass(frozen=True)
@@ -32,6 +36,7 @@ class DatasetSpec:
     seed: int
     target: str
     the_most_relevant: str
+    relationship_mode: str = "default_nonlinear"
 
 
 def _prepare_selector_dependencies(selector: Selector) -> None:
@@ -344,21 +349,26 @@ def run_three_dataset_test(
     target: str = "f_1_c_1",
     the_most_relevant: str = "f_1_c_3",
     dataset_settings: Iterable[DatasetSetting] = DEFAULT_DATASET_SETTINGS,
+    relationship_modes: Iterable[str] = DEFAULT_RELATIONSHIP_MODES,
     selector: Selector | None = None,
 ) -> pd.DataFrame:
     """Run the TESTING.md protocol and return result rows.
 
-    The returned table has one row per (dataset_setting x seed x selection method) and required columns:
+    The returned table has one row per
+    (dataset_setting x seed x relationship_mode x selection method) and required columns:
     selection_method, selected_feature, dbi_selected_feature, corr_selected_feature,
     the_ground_truth, dbi_ground_truth_feature, corr_ground_truth_feature, computation_time_sec.
     If ``selector`` is provided, one method is used. Otherwise defaults are used.
     """
     seed_list = [int(s) for s in seeds]
     settings_list = [(int(r), int(f), int(c)) for r, f, c in dataset_settings]
+    mode_list = [str(m) for m in relationship_modes]
     if not settings_list:
         raise ValueError("dataset_settings must contain at least one setting")
     if not seed_list:
         raise ValueError("seeds must contain at least one seed")
+    if not mode_list:
+        raise ValueError("relationship_modes must contain at least one mode")
 
     methods: list[tuple[str, Selector]]
     if selector is None:
@@ -376,30 +386,33 @@ def run_three_dataset_test(
     dataset_id = 1
     for n_rows, n_features, n_clusters in settings_list:
         for seed in seed_list:
-            df = generate_synthetic_dataset(
-                n_rows=n_rows,
-                n_features=n_features,
-                n_clusters=n_clusters,
-                target=target,
-                the_most_relevant=the_most_relevant,
-                seed=seed,
-            )
-            for method_name, method_selector in methods:
-                row = evaluate_one_dataset(
-                    df,
+            for relationship_mode in mode_list:
+                df = generate_synthetic_dataset(
+                    n_rows=n_rows,
+                    n_features=n_features,
+                    n_clusters=n_clusters,
                     target=target,
-                    the_ground_truth=the_most_relevant,
-                    selector=method_selector,
+                    the_most_relevant=the_most_relevant,
+                    relationship_mode=relationship_mode,
+                    seed=seed,
                 )
-                row["selection_method"] = method_name
-                row["n_rows"] = n_rows
-                row["n_features"] = n_features
-                row["n_clusters"] = n_clusters
-                row["dataset_id"] = dataset_id
-                row["seed"] = seed
-                row["target"] = target
-                rows.append(row)
-            dataset_id += 1
+                for method_name, method_selector in methods:
+                    row = evaluate_one_dataset(
+                        df,
+                        target=target,
+                        the_ground_truth=the_most_relevant,
+                        selector=method_selector,
+                    )
+                    row["selection_method"] = method_name
+                    row["n_rows"] = n_rows
+                    row["n_features"] = n_features
+                    row["n_clusters"] = n_clusters
+                    row["dataset_id"] = dataset_id
+                    row["seed"] = seed
+                    row["target"] = target
+                    row["relationship_mode"] = relationship_mode
+                    rows.append(row)
+                dataset_id += 1
 
     required_columns = [
         "selection_method",
@@ -420,10 +433,10 @@ def run_three_dataset_test(
     if missing:
         raise RuntimeError(f"result table missing required columns: {missing}")
 
-    ordered_columns = required_columns + ["dataset_id", "seed", "target"]
+    ordered_columns = required_columns + ["dataset_id", "seed", "target", "relationship_mode"]
     result = result[ordered_columns]
 
-    expected_rows = len(settings_list) * len(seed_list) * len(methods)
+    expected_rows = len(settings_list) * len(seed_list) * len(mode_list) * len(methods)
     if len(result) != expected_rows:
         raise RuntimeError(f"result table must contain {expected_rows} rows, got {len(result)}")
 

@@ -19,6 +19,7 @@
 이 생성기에서 `the_most_relevant`는 다음 성질을 갖도록 설계되어 있습니다.
 - `target`과 강한 관련성
 - `config` 값에 따른 충분한 변동성
+- 관계 모드(`relationship_mode`)에 따라 단조/비단조 비선형 구조를 선택 가능
 
 같은 클러스터에 속한 피처끼리는 의도적으로 상관이 생기며,
 선택 문제에서는 보통 `target`과 같은 클러스터 피처를 제외합니다.
@@ -55,12 +56,26 @@ target* = 0.6 * x_target^(0) + 1.4 * s + eps_t,   eps_t ~ N(0, 0.10^2)
 
 가장 관련성 높은 피처 `the_most_relevant` (최종값):
 
+1) `relationship_mode="default_nonlinear"` (기존):
+
 ```text
 mr* =
     1.1 * tanh(1.2 * target*)
   + 0.25 * (target*)^3
   + 0.15 * x_most_relevant^(0)
   + 0.40 * cfg_effect(config)
+  + eps_r,   eps_r ~ N(0, 0.03^2)
+```
+
+2) `relationship_mode="non_monotonic_strong"` (신규):
+
+```text
+mr* =
+    1.20 * sin(2.4 * target*)
+  + 0.55 * cos(0.8 * (target*)^2)
+  + 0.20 * (target*)^2
+  + 0.12 * x_most_relevant^(0)
+  + 0.45 * cfg_effect(config)
   + eps_r,   eps_r ~ N(0, 0.03^2)
 ```
 
@@ -76,7 +91,8 @@ x_f = (x_f - mean(x_f)) / std(x_f)
 - `the_most_relevant` 식의 `x_most_relevant^(0)`은 의도된 항입니다. `x_target^(0)`으로 바꾸면 "자기 기본값" 기여가 사라져 생성 구조가 달라집니다.
 - `s`는 모든 행에서 독립적으로 생성되지만(`N(0,1)`), `target`에 공통으로 주입되어 관련성을 강화합니다.
 - `cfg_effect(config)`는 같은 config를 가진 행들이 동일한 효과값을 공유하도록 만들어 DBI 평가에 필요한 분리 가능성을 높입니다.
-- `tanh`, `(target*)^3` 항으로 `target`과의 비선형 관계를 만들었습니다.
+- `default_nonlinear`는 기존의 단조 비선형(`tanh`, `target^3`) 구조를 사용합니다.
+- `non_monotonic_strong`는 `sin`, `cos(target^2)`를 포함한 강한 비단조 비선형 구조를 사용합니다.
 - 비선형 결합 강도를 높여, 클러스터 제외 규칙 하에서 `the_most_relevant`가 가장 관련성 높은 후보가 되도록 설계했습니다.
 - `cfg_effect` 항은 DBI 평가에 필요한 config 분리 가능성을 유지합니다.
 - 최종 반환 직전 모든 feature에 canonical normalization(z-score, 평균 0/표준편차 1)을 적용합니다.
@@ -117,12 +133,13 @@ df.to_feather("data/mydata.feather")
 
 동작:
 - 데이터 크기 설정 3개 각각에 대해 seed `0, 1, 2, 3, 4`를 모두 반복해 데이터셋 생성
-  - 총 데이터셋 수: `3 settings x 5 seeds = 15`
+- 각 `(dataset setting, seed)` 조합에서 관계 모드 2종(`default_nonlinear`, `non_monotonic_strong`)을 모두 생성
+  - 총 데이터셋 수: `3 settings x 5 seeds x 2 modes = 30`
   - 설정: `(100, 300, 3)`, `(1000, 300, 3)`, `(1000, 3000, 30)`
   - 위 3개 설정은 모두 `cluster당 feature 100개`를 만족
 - 생성 데이터셋을 `tests/tmp`에 저장
 - 4개 선택 방법(`abs_pearson`, `min_dbi`, `shap`, `mi`)으로 데이터셋별 선택 피처와 정답 피처를 평가
-- 60행 결과 테이블(3개 설정 x 5개 seed x 4개 방법)을 생성해 `result.csv`로 저장
+- 120행 결과 테이블(3개 설정 x 5개 seed x 2개 mode x 4개 방법)을 생성해 `result.csv`로 저장
 - 저장 전 `.round(3)` 적용
 
 실행 명령:

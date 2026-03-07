@@ -25,6 +25,11 @@ REQUIRED_RESULT_COLUMNS = {
 }
 
 
+def _sanitize_filename_token(value: str) -> str:
+    token = "".join(ch if (ch.isalnum() or ch in {"_", "-"}) else "_" for ch in value.strip())
+    return token or "unknown"
+
+
 def _dataset_path_for_row(row: pd.Series, datasets_dir: Path) -> Path:
     dataset_id = int(row["dataset_id"])
     n_rows = int(row["n_rows"])
@@ -243,6 +248,8 @@ def _plot_computation_time_bar(
     result_df: pd.DataFrame,
     output_dir: Path,
     summary: str = "median_iqr",
+    output_name: str = "time_bar.png",
+    title_context: str | None = None,
 ) -> None:
     method_order = ["abs_pearson", "min_dbi", "mi", "shap"]
     if summary not in {"mean_std", "median_iqr"}:
@@ -334,13 +341,16 @@ def _plot_computation_time_bar(
 
     ax.set_xticks(x)
     ax.set_xticklabels(mean_pivot.index, rotation=0)
-    ax.set_title(f"Computation Time {title_suffix} by Dataset Shape and Selection Method")
+    title = f"Computation Time {title_suffix} by Dataset Shape and Selection Method"
+    if title_context:
+        title = f"{title} ({title_context})"
+    ax.set_title(title)
     ax.set_xlabel("dataset_shape (#rows x #features)")
     ax.set_ylabel("computation_time_sec")
     ax.set_yscale("log")
     ax.legend(title="selection_method")
     fig.tight_layout()
-    fig.savefig(output_dir / "time_bar.png", dpi=150, bbox_inches="tight")
+    fig.savefig(output_dir / output_name, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -371,7 +381,20 @@ def visualize(result_csv: Path, datasets_dir: Path, output_dir: Path, time_summa
         config_norm,
         output_dir,
     )
-    _plot_computation_time_bar(result_df, output_dir, summary=time_summary)
+    _plot_computation_time_bar(result_df, output_dir, summary=time_summary, output_name="time_bar.png")
+
+    if "relationship_mode" in result_df.columns:
+        modes = sorted(result_df["relationship_mode"].dropna().astype(str).unique().tolist())
+        for mode in modes:
+            mode_df = result_df[result_df["relationship_mode"].astype(str) == mode].copy()
+            mode_token = _sanitize_filename_token(mode)
+            _plot_computation_time_bar(
+                mode_df,
+                output_dir,
+                summary=time_summary,
+                output_name=f"time_bar_{mode_token}.png",
+                title_context=f"relationship_mode={mode}",
+            )
 
 
 def _parse_args() -> argparse.Namespace:

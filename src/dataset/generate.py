@@ -51,6 +51,7 @@ def generate_synthetic_dataset(
     n_rows: int | None = None,
     target: str | None = None,
     the_most_relevant: str | None = None,
+    relationship_mode: str = "default_nonlinear",
     config_effect_scale: float = 3.0,
     seed: int | None = 42,
 ) -> pd.DataFrame:
@@ -90,6 +91,12 @@ def generate_synthetic_dataset(
         n_rows = n_features * measurements_per_feature
     elif n_rows < 1:
         raise ValueError("n_rows must be at least 1")
+    valid_relationship_modes = {"default_nonlinear", "non_monotonic_strong"}
+    if relationship_mode not in valid_relationship_modes:
+        raise ValueError(
+            f"relationship_mode must be one of {sorted(valid_relationship_modes)}, "
+            f"got '{relationship_mode}'"
+        )
     if config_effect_scale <= 0:
         raise ValueError("config_effect_scale must be > 0")
 
@@ -115,13 +122,24 @@ def generate_synthetic_dataset(
     }
     cfg_effect = np.array([cfg_effect_map[cfg_name] for cfg_name in config])
     target_values = values[target]
-    values[the_most_relevant] = (
-        1.1 * np.tanh(1.2 * target_values)
-        + 0.25 * np.power(target_values, 3)
-        + 0.15 * values[the_most_relevant]
-        + 0.40 * cfg_effect
-        + rng.normal(scale=0.03, size=n_rows)
-    )
+    if relationship_mode == "default_nonlinear":
+        values[the_most_relevant] = (
+            1.1 * np.tanh(1.2 * target_values)
+            + 0.25 * np.power(target_values, 3)
+            + 0.15 * values[the_most_relevant]
+            + 0.40 * cfg_effect
+            + rng.normal(scale=0.03, size=n_rows)
+        )
+    else:
+        # Strong non-monotonic structure to favor nonlinear selectors over correlation-only ones.
+        values[the_most_relevant] = (
+            1.20 * np.sin(2.4 * target_values)
+            + 0.55 * np.cos(0.8 * np.power(target_values, 2))
+            + 0.20 * np.power(target_values, 2)
+            + 0.12 * values[the_most_relevant]
+            + 0.45 * cfg_effect
+            + rng.normal(scale=0.03, size=n_rows)
+        )
 
     # Canonical normalization is applied before any downstream feature selection.
     _canonical_normalize_feature_columns(values)

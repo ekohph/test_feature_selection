@@ -14,6 +14,7 @@ import pandas as pd
 from dataset.generate import generate_synthetic_dataset
 from dataset.testing import (
     DEFAULT_DATASET_SETTINGS,
+    DEFAULT_RELATIONSHIP_MODES,
     default_selectors,
     evaluate_one_dataset,
     warm_up_selectors,
@@ -22,6 +23,7 @@ from dataset.testing import (
 
 def run_protocol() -> pd.DataFrame:
     seeds = [0, 1, 2, 3, 4]
+    relationship_modes = list(DEFAULT_RELATIONSHIP_MODES)
     target = "f_1_c_1"
     the_most_relevant = "f_1_c_3"
     methodologies = default_selectors()
@@ -44,36 +46,39 @@ def run_protocol() -> pd.DataFrame:
     dataset_id = 1
     for n_rows, n_features, n_clusters in dataset_settings:
         for seed in seeds:
-            df = generate_synthetic_dataset(
-                n_rows=n_rows,
-                n_features=n_features,
-                n_clusters=n_clusters,
-                target=target,
-                the_most_relevant=the_most_relevant,
-                seed=seed,
-            )
-
-            dataset_path = datasets_dir / (
-                f"dataset_{dataset_id}_r{n_rows}_f{n_features}_c{n_clusters}_seed_{seed}.feather"
-            )
-            df.to_feather(dataset_path)
-
-            for selection_method, selector in methodologies:
-                row = evaluate_one_dataset(
-                    df,
+            for relationship_mode in relationship_modes:
+                df = generate_synthetic_dataset(
+                    n_rows=n_rows,
+                    n_features=n_features,
+                    n_clusters=n_clusters,
                     target=target,
-                    the_ground_truth=the_most_relevant,
-                    selector=selector,
+                    the_most_relevant=the_most_relevant,
+                    relationship_mode=relationship_mode,
+                    seed=seed,
                 )
-                row["selection_method"] = selection_method
-                row["n_rows"] = n_rows
-                row["n_features"] = n_features
-                row["n_clusters"] = n_clusters
-                row["dataset_id"] = dataset_id
-                row["seed"] = seed
-                row["target"] = target
-                rows.append(row)
-            dataset_id += 1
+
+                dataset_path = datasets_dir / (
+                    f"dataset_{dataset_id}_r{n_rows}_f{n_features}_c{n_clusters}_seed_{seed}.feather"
+                )
+                df.to_feather(dataset_path)
+
+                for selection_method, selector in methodologies:
+                    row = evaluate_one_dataset(
+                        df,
+                        target=target,
+                        the_ground_truth=the_most_relevant,
+                        selector=selector,
+                    )
+                    row["selection_method"] = selection_method
+                    row["n_rows"] = n_rows
+                    row["n_features"] = n_features
+                    row["n_clusters"] = n_clusters
+                    row["dataset_id"] = dataset_id
+                    row["seed"] = seed
+                    row["target"] = target
+                    row["relationship_mode"] = relationship_mode
+                    rows.append(row)
+                dataset_id += 1
 
     required_columns = [
         "selection_method",
@@ -88,10 +93,10 @@ def run_protocol() -> pd.DataFrame:
         "dbi_ground_truth_feature",
         "corr_ground_truth_feature",
     ]
-    optional_columns = ["dataset_id", "seed", "target"]
+    optional_columns = ["dataset_id", "seed", "target", "relationship_mode"]
 
     result = pd.DataFrame(rows)[required_columns + optional_columns]
-    expected_rows = len(dataset_settings) * len(seeds) * len(methodologies)
+    expected_rows = len(dataset_settings) * len(seeds) * len(relationship_modes) * len(methodologies)
     if len(result) != expected_rows:
         raise RuntimeError(f"result must contain exactly {expected_rows} rows, got {len(result)}")
 
