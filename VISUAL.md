@@ -1,11 +1,11 @@
 # 시각화 가이드
 
-`run_protocol.py` 실행 후 생성된 결과를 시각화합니다.
+`run_protocol.py` 실행 후 생성된 결과(`result.csv`, `tests/tmp`)를 시각화합니다.
 
 ## 목적
 
-1. 선택된 피처와 타깃의 관계를 산점도로 확인
-2. 선택 방법별 계산 시간을 막대그래프로 비교
+1. 정답 피처/선택 피처와 `target`의 관계를 산점도로 확인
+2. 데이터셋 shape 및 선택 방법별 계산 시간 분포를 비교
 
 ## 입력
 
@@ -14,13 +14,17 @@
 
 ## 출력
 
-- `visuals/scatter.png`
-  - 전체 데이터셋 x method를 한 figure의 subplot grid로 저장
-  - x축: `selected_feature`, y축: `target`
+- `visuals/scatter_gt.png`
+  - 각 `dataset_id`별로 `the_ground_truth` vs `target` 산점도
   - 점 색상: `config`
+- `visuals/scatter_selected.png`
+  - `selected_feature != the_ground_truth`인 경우만 `selected_feature` vs `target` 산점도
+  - 불일치가 없으면 안내 문구 이미지를 저장
 - `visuals/time_bar.png`
-  - x축: `dataset_id`
-  - method별 계산시간(`computation_time_sec`) grouped bar
+  - x축: dataset shape (`#rows x #features`)
+  - 색상: `selection_method`
+  - y축: `computation_time_sec` (log scale)
+  - 기본 요약: `median_iqr` (center=median, error=IQR)
 
 ## 실행 방법 (PowerShell)
 
@@ -29,9 +33,20 @@ $env:PYTHONPATH = "src"
 python visualize_results.py --result-csv result.csv --datasets-dir tests/tmp --output-dir visuals
 ```
 
+요약 방식을 명시적으로 지정하려면:
+
+```powershell
+python visualize_results.py --result-csv result.csv --datasets-dir tests/tmp --output-dir visuals --time-summary median_iqr
+```
+
+옵션:
+
+- `--time-summary median_iqr` (기본)
+- `--time-summary mean_std`
+
 ## 참고
 
-- `result.csv`에는 최소한 다음 컬럼이 있어야 합니다:
+- 현재 프로토콜(3 settings x 5 seeds x 4 selectors) 기준 `result.csv`는 60행입니다.
+- `result.csv` 필수 컬럼:
   - `selection_method`, `dataset_id`, `seed`, `n_rows`, `n_features`, `n_clusters`
-  - `selected_feature`, `target`, `computation_time_sec`
-- 스크립트는 데이터셋 파일명을 위 규칙으로 찾습니다.
+  - `selected_feature`, `the_ground_truth`, `target`, `computation_time_sec`

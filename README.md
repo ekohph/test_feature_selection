@@ -35,8 +35,9 @@
 - `s`: `target`과 공유되는 행 단위 공통 신호 (`shared_signal`), `s ~ N(0, 1)`
 - `eps`: 가우시안 잡음
 - `cfg_effect(config)`: config 라벨별 랜덤 효과 함수
-  - 각 config 라벨 `k`에 대해 `a_k ~ N(0, 2^2)`를 먼저 샘플링
+  - 각 config 라벨 `k`에 대해 `a_k ~ N(0, config_effect_scale^2)`를 먼저 샘플링
   - 각 행 `i`에서는 `cfg_effect(config_i) = a_{config_i}`로 할당
+  - 기본값: `config_effect_scale = 3.0`
 
 행(row) 단위 생성식은 아래와 같습니다.
 
