@@ -5,6 +5,17 @@
 매 테스트 실행마다 **3개 데이터셋 설정 x 5개 seed x 2개 관계 모드로 생성한 데이터셋 30개**에서
 feature-selection 동작을 평가합니다.
 
+시간 측정 보고 시 함께 기록할 실행 환경:
+- CPU: `Intel(R) Core(TM) Ultra 7 155H` (16 cores, 22 logical processors, max 3.8GHz)
+- RAM: 총 용량 + 측정 시점 가용 메모리(또는 사용률)
+- 전원 모드: `powercfg /getactivescheme` 결과
+- 동시작업수: 벤치마크 동시 실행 프로세스 수(권장: `1`, 단일 실행)
+
+현재 실험 기록(2026-03-07):
+- RAM: 총 `31.59 GiB`, 가용 `17.11 GiB` (사용률 약 `45.8%`)
+- 전원 모드: `SAMSUNG MODE`
+- 동시작업수(벤치마크 프로세스): `1`
+
 각 데이터셋에서 수행할 일:
 - 알려진 `target`과 알려진 `the_most_relevant`(정답)로 데이터 생성
 - 선택 알고리즘 실행
@@ -154,6 +165,24 @@ x_f = (x_f - mean(x_f)) / std(x_f)
 - 네 방법 모두 feature 수 `P`에 대해 선형적으로 증가
 - row 수 `N` 증가에도 대체로 선형 증가
 - 예상 상대 속도(일반적): `abs_pearson` <= `min_dbi` <= `mi` < `shap(TreeExplainer)` (데이터 분포/모델 파라미터에 따라 변동 가능)
+
+### mode 통합 계산 시간 예상치 (10,000 x 20,000)
+
+- 기준:
+  - `result.csv`의 관측 shape 3개(100x300, 1000x300, 1000x3000) 중앙값을 사용
+  - power-law(`time ~= k * rows^a * features^b`)로 외삽
+  - relationship mode는 `default_nonlinear`와 `non_monotonic_strong`를 통합 집계
+
+| method | predicted time (sec) | approx |
+|---|---:|---:|
+| abs_pearson | 4.03 | ~0.07 min |
+| min_dbi | 24.06 | ~0.40 min |
+| mi | 586.17 | ~9.77 min |
+| shap | 11264.55 | ~187.7 min |
+
+참고(SHAP mode별 외삽):
+- `default_nonlinear`: `~6073 sec` (~101.2 min)
+- `non_monotonic_strong`: `~21496 sec` (~358.3 min)
 
 ## 결과 테이블 형식 (필수)
 
