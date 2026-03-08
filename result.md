@@ -35,8 +35,8 @@ mode별 정답률:
 
 | relationship_mode | abs_pearson | min_dbi | mi | shap |
 |---|---:|---:|---:|---:|
-| default_nonlinear | 1.000 | 0.600 | 1.000 | 1.000 |
-| non_monotonic_strong | 0.067 | 0.933 | 1.000 | 0.867 |
+| monotonic | 1.000 | 0.600 | 1.000 | 1.000 |
+| non_monotonic | 0.067 | 0.933 | 1.000 | 0.867 |
 
 전체(두 mode 통합) 정답률:
 
@@ -46,6 +46,15 @@ mode별 정답률:
 | min_dbi | 23 / 30 | 0.767 |
 | mi | 30 / 30 | 1.000 |
 | shap | 28 / 30 | 0.933 |
+
+방법론별 accuracy 요약(mode/overall):
+
+| method | monotonic | non_monotonic | overall |
+|---|---:|---:|---:|
+| abs_pearson | 15 / 15 (1.000) | 1 / 15 (0.067) | 16 / 30 (0.533) |
+| min_dbi | 9 / 15 (0.600) | 14 / 15 (0.933) | 23 / 30 (0.767) |
+| mi | 15 / 15 (1.000) | 15 / 15 (1.000) | 30 / 30 (1.000) |
+| shap | 15 / 15 (1.000) | 13 / 15 (0.867) | 28 / 30 (0.933) |
 
 핵심 관찰:
 - `non_monotonic_strong`에서 `abs_pearson` 성능이 크게 하락(1.000 -> 0.067).
