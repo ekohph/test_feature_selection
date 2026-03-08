@@ -1,4 +1,4 @@
-# Result Discussion (2026-03-07, updated)
+﻿# Result Discussion (2026-03-07, updated)
 
 분석 데이터:
 - `result.csv` (현재 120행: `3 settings x 5 seeds x 2 relationship modes x 4 methods`)
@@ -18,9 +18,9 @@
 
 | shape | abs_pearson | min_dbi | mi | shap |
 |---|---:|---:|---:|---:|
-| 100 x 300 | 0.0200 | 0.0690 | 0.1565 | 0.4920 |
-| 1000 x 300 | 0.0240 | 0.1090 | 0.8000 | 48.0915 |
-| 1000 x 3000 | 0.3605 | 1.6355 | 12.1720 | 77.6535 |
+| 100 x 300 | 0.0110 | 0.0590 | 0.1585 | 0.4680 |
+| 1000 x 300 | 0.0165 | 0.1355 | 1.4675 | 94.5675 |
+| 1000 x 3000 | 0.5450 | 3.5915 | 31.4365 | 231.1870 |
 
 해석:
 - 시간 순서는 일관적으로 `abs_pearson < min_dbi < mi < shap`.
@@ -35,22 +35,22 @@ mode별 정답률:
 
 | relationship_mode | abs_pearson | min_dbi | mi | shap |
 |---|---:|---:|---:|---:|
-| default_nonlinear | 1.000 | 0.800 | 1.000 | 1.000 |
-| non_monotonic_strong | 0.133 | 0.933 | 1.000 | 0.800 |
+| default_nonlinear | 1.000 | 0.600 | 1.000 | 1.000 |
+| non_monotonic_strong | 0.067 | 0.933 | 1.000 | 0.867 |
 
 전체(두 mode 통합) 정답률:
 
 | method | correct / total | hit rate |
 |---|---:|---:|
-| abs_pearson | 17 / 30 | 0.567 |
-| min_dbi | 26 / 30 | 0.867 |
+| abs_pearson | 16 / 30 | 0.533 |
+| min_dbi | 23 / 30 | 0.767 |
 | mi | 30 / 30 | 1.000 |
-| shap | 27 / 30 | 0.900 |
+| shap | 28 / 30 | 0.933 |
 
 핵심 관찰:
-- `non_monotonic_strong`에서 `abs_pearson` 성능이 크게 하락(1.000 -> 0.133).
+- `non_monotonic_strong`에서 `abs_pearson` 성능이 크게 하락(1.000 -> 0.067).
 - `mi`는 두 mode 모두 1.000으로 안정적.
-- `shap`은 비선형 모드에서 하락(1.000 -> 0.800)하지만 correlation 기반보다는 강건.
+- `shap`은 비선형 모드에서 하락(1.000 -> 0.867)하지만 correlation 기반보다는 강건.
 
 ## 3) 계산 시간이 mode에 거의 영향받지 않는 이유 (+ 그림)
 
@@ -66,9 +66,9 @@ shape별 `non_monotonic_strong / default_nonlinear` 시간비(중앙값):
 
 | shape | abs_pearson | min_dbi | mi | shap |
 |---|---:|---:|---:|---:|
-| 100 x 300 | 1.000 | 1.060 | 1.097 | 1.263 |
-| 1000 x 300 | 1.000 | 0.964 | 1.022 | 2.461 |
-| 1000 x 3000 | 1.031 | 1.033 | 0.958 | 2.084 |
+| 100 x 300 | 1.000 | 0.933 | 0.962 | 1.176 |
+| 1000 x 300 | 1.167 | 1.185 | 0.941 | 2.282 |
+| 1000 x 3000 | 1.011 | 1.018 | 0.854 | 2.368 |
 
 그림(mode별 시간 민감도 ratio):
 
@@ -82,14 +82,14 @@ mode 통합 기준 예상치:
 
 | method | predicted time (sec) | approx |
 |---|---:|---:|
-| abs_pearson | 4.03 | ~0.07 min |
-| min_dbi | 24.06 | ~0.40 min |
-| mi | 586.17 | ~9.77 min |
-| shap | 11264.55 | ~187.7 min |
+| abs_pearson | 14.59 | ~0.24 min |
+| min_dbi | 122.76 | ~2.05 min |
+| mi | 3634.85 | ~60.6 min |
+| shap | 97570.50 | ~1626.2 min |
 
 mode별 참고(특히 SHAP):
-- `default_nonlinear`: `shap ~6073 sec` (~101.2 min)
-- `non_monotonic_strong`: `shap ~21496 sec` (~358.3 min)
+- `default_nonlinear`: `shap ~49335 sec` (~822.2 min)
+- `non_monotonic_strong`: `shap ~135175 sec` (~2252.9 min)
 
 ## 5) 추가 해석: 왜 MI가 SHAP보다 정확했고, 왜 SHAP 시간이 더 흔들리는가
 
@@ -102,17 +102,16 @@ mode별 참고(특히 SHAP):
 
 ### 5-2) SHAP 시간이 mode에 따라 더 크게 변하는 이유
 
-- 이번 구현의 SHAP 시간에는 모델 학습(`RandomForestRegressor.fit`)과 설명 계산(`TreeExplainer.shap_values`)이 모두 포함된다.
-- `non_monotonic_strong`처럼 더 복잡한 함수에서는 트리가 더 깊어지는 경향이 있어, 설명 계산 경로가 길어지고 전체 시간이 증가할 수 있다.
-- 간단 진단(1000 x 300, seed=0, 동일 파라미터) 결과:
+- `result.csv` 기준으로도 SHAP 런타임은 mode에 따라 큰 차이를 보인다.
+- shape별 SHAP 중앙값 시간(초):
 
-| mode | RF fit (sec) | SHAP explain (sec) | total (sec) | avg tree depth |
-|---|---:|---:|---:|---:|
-| default_nonlinear | 1.41 | 23.95 | 25.36 | 18.48 |
-| non_monotonic_strong | 2.08 | 76.24 | 78.32 | 26.62 |
+| shape | default_nonlinear | non_monotonic_strong | ratio (non/default) |
+|---|---:|---:|---:|
+| 100 x 300 | 0.423 | 0.519 | 1.227 |
+| 1000 x 300 | 42.646 | 186.354 | 4.369 |
+| 1000 x 3000 | 162.519 | 274.015 | 1.686 |
 
-- 위 진단은 "모델 생성 + 설명 계산 비용"이 함수 복잡도에 따라 크게 달라질 수 있음을 뒷받침한다.  
-  따라서 SHAP 시간 변동은 단순 노이즈라기보다, 모델 복잡도 변화의 영향으로 보는 것이 타당하다.
+- 특히 `1000 x 300`에서 mode 전환 시 SHAP 시간이 약 4.37배 증가해, 함수 복잡도 변화에 민감하다는 점이 뚜렷하다.
 
 결론:
 - 정확도: 본 실험 구성에서는 MI가 가장 안정적으로 정답 feature를 찾았고, SHAP은 그 다음으로 강건했다.

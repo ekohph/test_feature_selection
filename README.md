@@ -1,4 +1,4 @@
-﻿# Feature Relevance 데이터셋 생성기
+﻿﻿# Feature Relevance 데이터셋 생성기
 
 이 프로젝트는 feature relevance 실험을 위한 합성 데이터셋을 생성합니다.
 피처는 클러스터 단위로 구성되며, 메타데이터 컬럼 `config`가 추가됩니다.

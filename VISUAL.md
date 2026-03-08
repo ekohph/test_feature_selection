@@ -1,4 +1,4 @@
-# 시각화 가이드
+﻿# 시각화 가이드
 
 `run_protocol.py` 실행 후 생성된 결과(`result.csv`, `tests/tmp`)를 시각화합니다.
 

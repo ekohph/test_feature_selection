@@ -112,7 +112,7 @@ def generate_synthetic_dataset(
 
     # Couple target and most relevant with a shared signal.
     shared_signal = rng.normal(size=n_rows)
-    values[target] = 0.6 * values[target] + 1.4 * shared_signal + rng.normal(scale=0.10, size=n_rows)
+    values[target] = 0.8 * values[target] + 1.2 * shared_signal + rng.normal(scale=0.10, size=n_rows)
 
     # Most relevant also varies strongly by config.
     # It is intentionally a nonlinear transform of target while keeping
